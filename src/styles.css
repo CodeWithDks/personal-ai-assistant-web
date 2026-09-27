@@ -176,8 +176,26 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes auth-enter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes form-swap {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes success-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @utility animate-shell-enter { animation: shell-enter 500ms cubic-bezier(.2,.8,.2,1) both; }
 @utility animate-mode-enter { animation: mode-enter 350ms cubic-bezier(.2,.8,.2,1) both; }
+@utility animate-auth-enter { animation: auth-enter 500ms cubic-bezier(.2,.8,.2,1) both; }
+@utility animate-form-swap { animation: form-swap 280ms cubic-bezier(.2,.8,.2,1) both; }
+@utility animate-success-in { animation: success-in 320ms cubic-bezier(.2,.8,.2,1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
