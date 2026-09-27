@@ -239,7 +239,7 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-function AuthField({ id, label, type, autoComplete, placeholder, value, error, disabled, onChange }: { id: string; label: string; type: string; autoComplete: string; placeholder: string; value: string; error?: string; disabled?: boolean; onChange: (value: string) => void }) {
+function AuthField({ id, label, type, autoComplete, placeholder, value, error, disabled, onChange }: { id: string; label: string; type: string; autoComplete: string; placeholder: string; value: string; error: string | undefined; disabled?: boolean; onChange: (value: string) => void }) {
   const errorId = `${id}-error`;
   return (
     <div className="space-y-2">
