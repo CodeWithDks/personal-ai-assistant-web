@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bot, CheckSquare2, ChevronRight, LogOut, Menu, MessageCircle, Moon, Sparkles, Sun, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bot, CheckCircle2, CheckSquare2, ChevronRight, LoaderCircle, LogOut, Menu, MessageCircle, Moon, Sparkles, Sun, X } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -21,11 +23,14 @@ export const Route = createFileRoute("/")({
 });
 
 type Mode = "chat" | "organize";
+type AuthMode = "login" | "register";
+type AuthErrors = Partial<Record<"email" | "password" | "confirmPassword", string>>;
 
 function Index() {
   const [mode, setMode] = useState<Mode>("chat");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState<boolean | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("personal-ai-theme");
@@ -45,6 +50,10 @@ function Index() {
     setMode(nextMode);
     setMobileOpen(false);
   };
+
+  if (!isLoggedIn) {
+    return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
+  }
 
   return (
     <TooltipProvider delayDuration={350}>
@@ -81,7 +90,7 @@ function Index() {
                 <span className="absolute left-1 top-1 size-5 rounded-full bg-card shadow-sm transition-transform duration-300 aria-checked:translate-x-5" />
               </button>
             </div>
-            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive">
+            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={() => setIsLoggedIn(false)}>
               <LogOut /> Log out
             </Button>
           </div>
@@ -116,6 +125,130 @@ function Index() {
         </main>
       </div>
     </TooltipProvider>
+  );
+}
+
+function AuthScreen({ onLogin }: { onLogin: () => void }) {
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<AuthErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [registered, setRegistered] = useState(false);
+
+  const selectMode = (nextMode: AuthMode) => {
+    if (submitting || nextMode === authMode) return;
+    setAuthMode(nextMode);
+    setErrors({});
+    setRegistered(false);
+  };
+
+  const validate = () => {
+    const nextErrors: AuthErrors = {};
+    if (!email.trim()) nextErrors.email = "Enter your email address.";
+    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
+    if (!password) nextErrors.password = "Enter your password.";
+    else if (authMode === "register" && password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (authMode === "register" && !confirmPassword) nextErrors.confirmPassword = "Confirm your password.";
+    else if (authMode === "register" && password !== confirmPassword) nextErrors.confirmPassword = "Passwords don't match.";
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validate()) return;
+    setSubmitting(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 750));
+
+    if (authMode === "login") {
+      onLogin();
+      return;
+    }
+
+    setSubmitting(false);
+    setRegistered(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    setRegistered(false);
+    setAuthMode("login");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const clearError = (field: keyof AuthErrors) => {
+    if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
+  };
+
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10 text-foreground sm:px-6">
+      <div className="absolute inset-x-0 top-0 h-1 bg-primary" />
+      <div className="animate-auth-enter w-full max-w-md">
+        <div className="mb-8 flex justify-center">
+          <Brand />
+        </div>
+
+        <section className="border border-border bg-card p-5 shadow-sm sm:p-8" aria-labelledby="auth-heading">
+          <div className="text-center">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-primary">Your personal workspace</p>
+            <h1 id="auth-heading" className="mt-3 font-display text-3xl font-semibold">
+              {authMode === "login" ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {authMode === "login" ? "Sign in to continue to your assistant." : "Set up your space in just a moment."}
+            </p>
+          </div>
+
+          <div className="relative mt-7 grid grid-cols-2 rounded-md bg-muted p-1" aria-label="Authentication mode">
+            <span className={cn("absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-sm bg-card shadow-sm transition-transform duration-300 ease-out", authMode === "register" && "translate-x-full")} />
+            {(["login", "register"] as const).map((item) => (
+              <Button key={item} type="button" variant="ghost" className={cn("relative z-10 h-9 capitalize hover:bg-transparent", authMode === item ? "text-foreground" : "text-muted-foreground")} aria-pressed={authMode === item} onClick={() => selectMode(item)} disabled={submitting}>
+                {item}
+              </Button>
+            ))}
+          </div>
+
+          {registered ? (
+            <div className="animate-success-in flex min-h-72 flex-col items-center justify-center text-center" role="status">
+              <span className="flex size-14 items-center justify-center rounded-full bg-accent text-primary">
+                <CheckCircle2 className="size-7" />
+              </span>
+              <h2 className="mt-5 font-display text-2xl font-semibold">Account ready</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Taking you back to sign in…</p>
+            </div>
+          ) : (
+            <form key={authMode} className="animate-form-swap mt-7 space-y-5" noValidate onSubmit={handleSubmit}>
+              <AuthField id="email" label="Email" type="email" autoComplete="email" placeholder="you@example.com" value={email} error={errors.email} onChange={(value) => { setEmail(value); clearError("email"); }} />
+              <AuthField id="password" label="Password" type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} placeholder="Enter your password" value={password} error={errors.password} onChange={(value) => { setPassword(value); clearError("password"); }} />
+
+              <div className={cn("grid transition-all duration-300", authMode === "register" ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")} aria-hidden={authMode !== "register"}>
+                <div className="overflow-hidden">
+                  <AuthField id="confirm-password" label="Confirm password" type="password" autoComplete="new-password" placeholder="Enter your password again" value={confirmPassword} error={errors.confirmPassword} disabled={authMode !== "register"} onChange={(value) => { setConfirmPassword(value); clearError("confirmPassword"); }} />
+                </div>
+              </div>
+
+              <Button type="submit" size="lg" className="mt-1 w-full transition-transform active:scale-[0.98]" disabled={submitting}>
+                {submitting ? <><LoaderCircle className="animate-spin" /> {authMode === "login" ? "Signing in…" : "Creating account…"}</> : authMode === "login" ? "Sign in" : "Create account"}
+              </Button>
+            </form>
+          )}
+        </section>
+        <p className="mt-6 text-center font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">Private by design · Ready when you are</p>
+      </div>
+    </main>
+  );
+}
+
+function AuthField({ id, label, type, autoComplete, placeholder, value, error, disabled, onChange }: { id: string; label: string; type: string; autoComplete: string; placeholder: string; value: string; error?: string; disabled?: boolean; onChange: (value: string) => void }) {
+  const errorId = `${id}-error`;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type={type} autoComplete={autoComplete} placeholder={placeholder} value={value} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={(event) => onChange(event.target.value)} className={cn("h-11 bg-background transition-[border-color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring/30", error && "border-destructive focus-visible:ring-destructive/20")} />
+      <div className={cn("grid transition-all duration-200", error ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+        <p id={errorId} className="overflow-hidden text-xs font-medium text-destructive" role="alert">{error}</p>
+      </div>
+    </div>
   );
 }
 
