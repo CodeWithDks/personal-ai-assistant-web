@@ -58,7 +58,7 @@ function Index() {
 
         {mobileOpen && <button aria-label="Close navigation" className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />}
 
-        <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-[min(19rem,86vw)] flex-col border-r border-border bg-card p-5 transition-transform duration-300 ease-out lg:w-72 lg:translate-x-0", mobileOpen ? "translate-x-0" : "-translate-x-full")}>
+        <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-76 flex-col border-r border-border bg-card p-5 transition-transform duration-300 ease-out lg:w-72 lg:max-w-none lg:translate-x-0", mobileOpen ? "translate-x-0" : "-translate-x-full")}>
           <Brand />
           <div className="mt-10 px-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</div>
           <nav className="mt-3 space-y-1.5" aria-label="Workspace navigation">
