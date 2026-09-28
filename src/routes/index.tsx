@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Bot, CheckCircle2, CheckSquare2, ChevronRight, LoaderCircle, LogOut, Menu, MessageCircle, Moon, Sparkles, Sun, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
+import { ChatScreen } from "@/components/ChatScreen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,9 +114,15 @@ function Index() {
               </Tooltip>
             </div>
 
-            <section key={mode} className="animate-mode-enter flex flex-1 items-center justify-center py-12">
-              <EmptyState mode={mode} />
-            </section>
+            {mode === "chat" ? (
+              <section key={mode} className="animate-mode-enter flex flex-1 py-5">
+                <ChatScreen />
+              </section>
+            ) : (
+              <section key={mode} className="animate-mode-enter flex flex-1 items-center justify-center py-12">
+                <EmptyState mode={mode} />
+              </section>
+            )}
 
             <footer className="flex items-center justify-between border-t border-border pt-5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-success" /> System ready</span>
