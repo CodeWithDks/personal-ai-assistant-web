@@ -41,7 +41,7 @@ export function ChatScreen() {
     setRecording(false);
     setThinking(true);
     window.setTimeout(() => {
-      const reply = MOCK_REPLIES[replyIndex.current++ % MOCK_REPLIES.length];
+      const reply = MOCK_REPLIES[replyIndex.current++ % MOCK_REPLIES.length] ?? "";
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", content: reply, time: timeNow() }]);
       setThinking(false);
     }, 1200);
