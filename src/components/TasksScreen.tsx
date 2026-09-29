@@ -1,3 +1,4 @@
+import { NotesScreen } from "@/components/NotesScreen";
 import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleCheck, Flag, ListChecks, NotebookPen, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
@@ -60,13 +61,7 @@ export function OrganizeScreen() {
         ))}
       </div>
       <div key={tab} className="animate-mode-enter mt-6">
-        {tab === "tasks" ? <TasksScreen /> : (
-          <div className="mx-auto max-w-md py-16 text-center">
-            <NotebookPen className="mx-auto size-8 text-primary" strokeWidth={1.5} />
-            <h2 className="mt-4 font-display text-2xl font-semibold">Notes are on their way</h2>
-            <p className="mt-2 text-sm text-muted-foreground">A place for longer thoughts is coming in the next step.</p>
-          </div>
-        )}
+        {tab === "tasks" ? <TasksScreen /> : <NotesScreen />}
       </div>
     </div>
   );
