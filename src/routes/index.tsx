@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, CheckSquare2, ChevronRight, LoaderCircle, LogOut, Me
 import { FormEvent, useEffect, useState } from "react";
 
 import { ChatScreen } from "@/components/ChatScreen";
+import { OrganizeScreen } from "@/components/TasksScreen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,8 +120,8 @@ function Index() {
                 <ChatScreen />
               </section>
             ) : (
-              <section key={mode} className="animate-mode-enter flex flex-1 items-center justify-center py-12">
-                <EmptyState mode={mode} />
+              <section key={mode} className="animate-mode-enter flex flex-1 py-6">
+                <OrganizeScreen />
               </section>
             )}
 
