@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 type Priority = "low" | "medium" | "high";
 type Status = "pending" | "completed";
-type Task = { id: string; title: string; description?: string; priority: Priority; status: Status; dueDate?: string; createdAt: number };
+type Task = { id: string; title: string; description?: string | undefined; priority: Priority; status: Status; dueDate?: string | undefined; createdAt: number };
 
 const PAGE_SIZE = 10;
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
