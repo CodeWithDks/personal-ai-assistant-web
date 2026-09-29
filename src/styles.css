@@ -197,6 +197,16 @@
 @utility animate-form-swap { animation: form-swap 280ms cubic-bezier(.2,.8,.2,1) both; }
 @utility animate-success-in { animation: success-in 320ms cubic-bezier(.2,.8,.2,1) both; }
 
+@keyframes task-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes task-out {
+  to { opacity: 0; transform: translateX(24px) scale(0.96); }
+}
+@utility animate-task-in { animation: task-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+@utility animate-task-out { animation: task-out 260ms ease-in forwards; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
