@@ -276,7 +276,7 @@ function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; to
             </>
           )}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em]">
-            <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5", priorityStyles[task.priority])}>
+            <span className={cn("inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5", priorityStyles[task.priority])}>
               <Flag className="size-3" /> {task.priority}
             </span>
             {done && <span className="rounded-sm border border-success/30 bg-success/10 px-1.5 py-0.5 text-success">completed</span>}

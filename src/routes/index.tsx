@@ -89,7 +89,7 @@ function Index() {
                   <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{dark ? "Dark" : "Light"} mode</p>
                 </div>
               </div>
-              <button type="button" role="switch" aria-checked={Boolean(dark)} aria-label="Toggle dark mode" onClick={toggleTheme} className="relative h-7 w-12 rounded-full bg-border transition-colors duration-300 aria-checked:bg-primary">
+              <button type="button" role="switch" aria-checked={Boolean(dark)} aria-label="Toggle dark mode" onClick={toggleTheme} className="relative h-7 w-12 rounded-full bg-border transition-colors duration-300 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-checked:bg-primary">
                 <span className="absolute left-1 top-1 size-5 rounded-full bg-card shadow-sm transition-transform duration-300 aria-checked:translate-x-5" />
               </button>
             </div>
