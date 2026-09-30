@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { FieldError, ListSkeleton, useMockLoading } from "@/components/StatusBlocks";
 
 type Priority = "low" | "medium" | "high";
 type Status = "pending" | "completed";
@@ -75,6 +76,7 @@ function TasksScreen() {
   const [sort, setSort] = useState<"due" | "priority" | "newest">("due");
   const [page, setPage] = useState(1);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const loading = useMockLoading();
 
   const today = todayISO();
 
@@ -147,7 +149,9 @@ function TasksScreen() {
         </div>
       </div>
 
-      {tasks.length === 0 ? (
+      {loading ? (
+        <ListSkeleton label="Loading tasks" />
+      ) : tasks.length === 0 ? (
         <EmptyBlock icon={<ListChecks className="size-7 text-primary" strokeWidth={1.5} />} title="No tasks yet" body="Add your first task above to start planning your day." />
       ) : visible.length === 0 ? (
         <EmptyBlock icon={<SearchX className="size-7 text-primary" strokeWidth={1.5} />} title="Nothing matches" body="No tasks fit your current search or filters." action={<Button variant="outline" size="sm" onClick={resetFilters}>Clear filters</Button>} />
@@ -199,10 +203,8 @@ function AddTaskForm({ onAdd }: { onAdd: (task: Task) => void }) {
           <form noValidate onSubmit={submit} className="space-y-4 border-t border-border p-4">
             <div className="space-y-2">
               <Label htmlFor="task-title">Title</Label>
-              <Input id="task-title" value={title} maxLength={200} disabled={!open} aria-invalid={Boolean(error)} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="What needs doing?" className={cn("h-10 bg-background", error && "border-destructive")} />
-              <div className={cn("grid transition-all duration-200", error ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
-                <p className="overflow-hidden text-xs font-medium text-destructive" role="alert">{error}</p>
-              </div>
+              <Input id="task-title" value={title} maxLength={200} disabled={!open} aria-invalid={Boolean(error)} aria-describedby={error ? "task-title-error" : undefined} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="What needs doing?" className={cn("h-10 bg-background", error && "border-destructive")} />
+              <FieldError id="task-title-error" message={error} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="task-desc">Description <span className="text-muted-foreground">(optional)</span></Label>
@@ -274,12 +276,12 @@ function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; to
             </>
           )}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em]">
-            <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5", priorityStyles[task.priority])}>
+            <span className={cn("inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5", priorityStyles[task.priority])}>
               <Flag className="size-3" /> {task.priority}
             </span>
-            {done && <span className="rounded border border-success/30 bg-success/10 px-1.5 py-0.5 text-success">completed</span>}
-            {overdue && <span className="inline-flex items-center gap-1 rounded border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive"><AlertTriangle className="size-3" /> overdue</span>}
-            {dueToday && <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning">due today</span>}
+            {done && <span className="rounded-sm border border-success/30 bg-success/10 px-1.5 py-0.5 text-success">completed</span>}
+            {overdue && <span className="inline-flex items-center gap-1 rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive"><AlertTriangle className="size-3" /> overdue</span>}
+            {dueToday && <span className="rounded-sm border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-warning">due today</span>}
             {task.dueDate && <span className="inline-flex items-center gap-1 px-1 text-muted-foreground"><CalendarDays className="size-3" /> {formatDate(task.dueDate)}</span>}
           </div>
         </div>
@@ -293,9 +295,9 @@ function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; to
               </div>
             ) : (
               <>
-                {!done && <Button size="icon" variant="ghost" aria-label="Quick mark done" className="size-8 hover:text-success" onClick={() => onUpdate({ status: "completed" })}><CircleCheck /></Button>}
-                <Button size="icon" variant="ghost" aria-label="Edit task" className="size-8" onClick={() => { setDraftTitle(task.title); setDraftPriority(task.priority); setEditing(true); }}><Pencil /></Button>
-                <Button size="icon" variant="ghost" aria-label="Delete task" className="size-8 hover:text-destructive" onClick={() => setConfirming(true)}><Trash2 /></Button>
+                {!done && <Button size="icon" variant="ghost" aria-label="Quick mark done" className="size-10 hover:text-success sm:size-8" onClick={() => onUpdate({ status: "completed" })}><CircleCheck /></Button>}
+                <Button size="icon" variant="ghost" aria-label="Edit task" className="size-10 sm:size-8" onClick={() => { setDraftTitle(task.title); setDraftPriority(task.priority); setEditing(true); }}><Pencil /></Button>
+                <Button size="icon" variant="ghost" aria-label="Delete task" className="size-10 hover:text-destructive sm:size-8" onClick={() => setConfirming(true)}><Trash2 /></Button>
               </>
             )}
           </div>

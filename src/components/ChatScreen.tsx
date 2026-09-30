@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ChatSkeleton, useMockLoading } from "@/components/StatusBlocks";
 
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string };
 
@@ -18,6 +19,7 @@ const timeNow = () => new Date().toLocaleTimeString([], { hour: "2-digit", minut
 export function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const loading = useMockLoading();
   const [thinking, setThinking] = useState(false);
   const [recording, setRecording] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -66,7 +68,9 @@ export function ChatScreen() {
       )}
 
       <div className="flex-1 overflow-y-auto pr-1" aria-live="polite">
-        {empty ? (
+        {loading ? (
+          <ChatSkeleton />
+        ) : empty ? (
           <div className="animate-mode-enter flex h-full items-center justify-center text-center">
             <div className="max-w-md">
               <div className="mx-auto flex size-20 items-center justify-center rounded-full border border-border bg-surface-raised shadow-sm">
