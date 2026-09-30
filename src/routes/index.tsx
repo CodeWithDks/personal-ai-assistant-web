@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { FieldError } from "@/components/StatusBlocks";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -196,7 +197,7 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
           <Brand />
         </div>
 
-        <section className="border border-border bg-card p-5 shadow-sm sm:p-8" aria-labelledby="auth-heading">
+        <section className="rounded-lg border border-border bg-card p-5 shadow-sm sm:p-8" aria-labelledby="auth-heading">
           <div className="text-center">
             <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-primary">Your personal workspace</p>
             <h1 id="auth-heading" className="mt-3 font-display text-3xl font-semibold">
@@ -253,9 +254,7 @@ function AuthField({ id, label, type, autoComplete, placeholder, value, error, d
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Input id={id} type={type} autoComplete={autoComplete} placeholder={placeholder} value={value} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={(event) => onChange(event.target.value)} className={cn("h-11 bg-background transition-[border-color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring/30", error && "border-destructive focus-visible:ring-destructive/20")} />
-      <div className={cn("grid transition-all duration-200", error ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
-        <p id={errorId} className="overflow-hidden text-xs font-medium text-destructive" role="alert">{error}</p>
-      </div>
+      <FieldError id={errorId} message={error} />
     </div>
   );
 }

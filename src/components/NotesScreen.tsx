@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { FieldError, ListSkeleton, useMockLoading } from "@/components/StatusBlocks";
 
 type Note = { id: string; title?: string | undefined; content: string; createdAt: number };
 
@@ -64,6 +65,7 @@ export function NotesScreen() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const loading = useMockLoading();
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -108,7 +110,9 @@ export function NotesScreen() {
         </p>
       </div>
 
-      {notes.length === 0 ? (
+      {loading ? (
+        <ListSkeleton label="Loading notes" />
+      ) : notes.length === 0 ? (
         <EmptyBlock
           icon={<NotebookPen className="size-7 text-primary" strokeWidth={1.5} />}
           title="No notes yet"
@@ -182,9 +186,7 @@ function AddNoteForm({ onAdd }: { onAdd: (note: Note) => void }) {
                 aria-describedby={error ? "note-content-error" : undefined}
                 className={cn("w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30", error && "border-destructive")}
               />
-              <div className={cn("grid transition-all duration-200", error ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
-                <p id="note-content-error" className="overflow-hidden text-xs font-medium text-destructive" role="alert">{error}</p>
-              </div>
+              <FieldError id="note-content-error" message={error} />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => { setOpen(false); setError(""); }}>Cancel</Button>
@@ -235,9 +237,7 @@ function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: 
               aria-describedby={error ? "note-edit-error" : undefined}
               className={cn("w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30", error && "border-destructive")}
             />
-            <div className={cn("grid transition-all duration-200", error ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
-              <p id="note-edit-error" className="overflow-hidden text-xs font-medium text-destructive" role="alert">{error}</p>
-            </div>
+            <FieldError id="note-edit-error" message={error} />
           </div>
           <div className="flex gap-1">
             <Button size="sm" onClick={save}><Check /> Save</Button>
@@ -252,7 +252,7 @@ function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: 
             <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
               <CalendarDays className="size-3" /> {formatDate(note.createdAt)}
             </span>
-            <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:transition-opacity sm:duration-200 sm:group-hover:opacity-100">
+            <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:transition-opacity sm:duration-200 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
               {confirming ? (
                 <div className="animate-form-swap flex gap-1">
                   <Button size="sm" variant="destructive" onClick={onDelete}>Confirm</Button>
@@ -260,8 +260,8 @@ function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: 
                 </div>
               ) : (
                 <>
-                  <Button size="icon" variant="ghost" aria-label="Edit note" className="size-8" onClick={startEdit}><Pencil /></Button>
-                  <Button size="icon" variant="ghost" aria-label="Delete note" className="size-8 hover:text-destructive" onClick={() => setConfirming(true)}><Trash2 /></Button>
+                  <Button size="icon" variant="ghost" aria-label="Edit note" className="size-10 sm:size-8" onClick={startEdit}><Pencil /></Button>
+                  <Button size="icon" variant="ghost" aria-label="Delete note" className="size-10 hover:text-destructive sm:size-8" onClick={() => setConfirming(true)}><Trash2 /></Button>
                 </>
               )}
             </div>
