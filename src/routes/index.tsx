@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { FieldError } from "@/components/StatusBlocks";
+import { ErrorNotice, FieldError } from "@/components/StatusBlocks";
+import { clearSession, getToken, login, onUnauthorized, onWakingChange, pingHealth, register, setToken, ApiError } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,6 +35,7 @@ function Index() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState<boolean | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [waking, setWaking] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("personal-ai-theme");
@@ -54,8 +56,31 @@ function Index() {
     setMobileOpen(false);
   };
 
+  useEffect(() => {
+    void pingHealth();
+    setIsLoggedIn(Boolean(getToken()));
+    const offUnauth = onUnauthorized(() => setIsLoggedIn(false));
+    const offWaking = onWakingChange(setWaking);
+    return () => {
+      offUnauth();
+      offWaking();
+    };
+  }, []);
+
+  const logout = () => {
+    clearSession();
+    setMode("chat");
+    setIsLoggedIn(false);
+  };
+
+  const wakingBanner = waking && (
+    <div role="status" className="animate-mode-enter fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-mono text-[11px] text-muted-foreground shadow-sm">
+      <LoaderCircle className="size-3.5 animate-spin text-warning" /> Waking up the server...
+    </div>
+  );
+
   if (!isLoggedIn) {
-    return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
+    return <>{<AuthScreen onLogin={() => setIsLoggedIn(true)} />}{wakingBanner}</>;
   }
 
   return (
@@ -93,7 +118,7 @@ function Index() {
                 <span className="absolute left-1 top-1 size-5 rounded-full bg-card shadow-sm transition-transform duration-300 aria-checked:translate-x-5" />
               </button>
             </div>
-            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={() => setIsLoggedIn(false)}>
+            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={logout}>
               <LogOut /> Log out
             </Button>
           </div>
@@ -145,11 +170,13 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [errors, setErrors] = useState<AuthErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const selectMode = (nextMode: AuthMode) => {
     if (submitting || nextMode === authMode) return;
     setAuthMode(nextMode);
     setErrors({});
+    setServerError(null);
     setRegistered(false);
   };
 
@@ -158,7 +185,8 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
     if (!email.trim()) nextErrors.email = "Enter your email address.";
     else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
     if (!password) nextErrors.password = "Enter your password.";
-    else if (authMode === "register" && password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else if (password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else if (password.length > 72) nextErrors.password = "Use 72 characters or fewer.";
     if (authMode === "register" && !confirmPassword) nextErrors.confirmPassword = "Confirm your password.";
     else if (authMode === "register" && password !== confirmPassword) nextErrors.confirmPassword = "Passwords don't match.";
     setErrors(nextErrors);
@@ -167,12 +195,20 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setServerError(null);
     if (!validate()) return;
     setSubmitting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 750));
-
-    if (authMode === "login") {
-      onLogin();
+    try {
+      if (authMode === "login") {
+        const { access_token } = await login(email.trim(), password);
+        setToken(access_token);
+        onLogin();
+        return;
+      }
+      await register(email.trim(), password);
+    } catch (err) {
+      setServerError(err instanceof ApiError ? err.message : "Couldn't reach the server. Please try again.");
+      setSubmitting(false);
       return;
     }
 
@@ -236,6 +272,7 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
                 </div>
               </div>
 
+              {serverError && <ErrorNotice title={serverError} variant={serverError.startsWith("Couldn't reach") ? "offline" : "error"} />}
               <Button type="submit" size="lg" className="mt-1 w-full transition-transform active:scale-[0.98]" disabled={submitting}>
                 {submitting ? <><LoaderCircle className="animate-spin" /> {authMode === "login" ? "Signing in…" : "Creating account…"}</> : authMode === "login" ? "Sign in" : "Create account"}
               </Button>

@@ -1,0 +1,124 @@
+import { API_BASE_URL } from "./config";
+
+const TOKEN_KEY = "personal-ai-token";
+const TIMEOUT_MS = 60_000;
+const SLOW_MS = 5_000;
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/* ---------- token ---------- */
+export const getToken = () => (typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY));
+export const setToken = (t: string) => window.localStorage.setItem(TOKEN_KEY, t);
+
+type Listener = () => void;
+const unauthListeners = new Set<Listener>();
+const clearCacheListeners = new Set<Listener>();
+export const onUnauthorized = (fn: Listener) => (unauthListeners.add(fn), () => void unauthListeners.delete(fn));
+export const onClearCache = (fn: Listener) => (clearCacheListeners.add(fn), () => void clearCacheListeners.delete(fn));
+
+/** Clears the token and any cached data. */
+export function clearSession() {
+  window.localStorage.removeItem(TOKEN_KEY);
+  clearCacheListeners.forEach((fn) => fn());
+}
+
+/* ---------- waking-up state ---------- */
+let slowCount = 0;
+const slowListeners = new Set<(waking: boolean) => void>();
+const emitSlow = () => slowListeners.forEach((fn) => fn(slowCount > 0));
+export const onWakingChange = (fn: (waking: boolean) => void) => (slowListeners.add(fn), () => void slowListeners.delete(fn));
+
+/* ---------- error messages ---------- */
+type Detail = string | { loc?: (string | number)[]; msg?: string }[] | undefined;
+
+export function formatDetail(detail: Detail): string | null {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail.map((d) => {
+      const field = d.loc?.filter((l) => l !== "body").join(".");
+      return field ? `${field}: ${d.msg ?? "invalid"}` : d.msg ?? "Invalid value";
+    });
+    return parts.length ? parts.join("; ") : null;
+  }
+  return null;
+}
+
+export function messageFor(status: number, path: string, detail: Detail): string {
+  if (status === 401 && path.startsWith("/auth/login")) return "Incorrect email or password.";
+  if (status === 401) return "Your session has expired. Please sign in again.";
+  if (status === 429) return "Too many requests, please wait a minute.";
+  if (status >= 500) return "Something went wrong on the server. Please try again.";
+  if (status === 422) return formatDetail(detail) ?? "Some of the information is invalid.";
+  return formatDetail(detail) ?? "Request failed. Please try again.";
+}
+
+const NETWORK_MSG = "Couldn't reach the server. Please try again.";
+
+/* ---------- request ---------- */
+type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; silent?: boolean };
+
+export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  let body: BodyInit | null = null;
+  if (opts.json !== undefined) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(opts.json);
+  } else if (opts.form) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = new URLSearchParams(opts.form).toString();
+  }
+  if (!path.startsWith("/auth/")) {
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let slow = false;
+  const slowTimer = opts.silent
+    ? undefined
+    : setTimeout(() => {
+        slow = true;
+        slowCount++;
+        emitSlow();
+      }, SLOW_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { method: opts.method ?? "GET", headers, body, signal: controller.signal });
+  } catch {
+    throw new ApiError(NETWORK_MSG, 0);
+  } finally {
+    clearTimeout(timeout);
+    clearTimeout(slowTimer);
+    if (slow) {
+      slowCount--;
+      emitSlow();
+    }
+  }
+
+  const data = await res.json().catch(() => undefined);
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/login")) {
+      clearSession();
+      unauthListeners.forEach((fn) => fn());
+    }
+    throw new ApiError(messageFor(res.status, path, (data as { detail?: Detail } | undefined)?.detail), res.status);
+  }
+  return data as T;
+}
+
+/* ---------- endpoints ---------- */
+export const pingHealth = () => apiRequest("/health", { silent: true }).catch(() => undefined);
+
+export const register = (email: string, password: string) =>
+  apiRequest<{ id: number | string; email: string; created_at: string }>("/auth/register", { method: "POST", json: { email, password } });
+
+export const login = (email: string, password: string) =>
+  apiRequest<{ access_token: string; token_type: string }>("/auth/login", { method: "POST", form: { username: email, password } });
