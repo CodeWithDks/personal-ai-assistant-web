@@ -122,3 +122,29 @@ export const register = (email: string, password: string) =>
 
 export const login = (email: string, password: string) =>
   apiRequest<{ access_token: string; token_type: string }>("/auth/login", { method: "POST", form: { username: email, password } });
+
+/* ---------- tasks ---------- */
+export type ApiTask = {
+  id: number | string;
+  title: string;
+  description: string | null;
+  status: "pending" | "completed";
+  priority: "low" | "medium" | "high";
+  due_date: string | null;
+  created_at: string;
+};
+export type TaskSearch = { keyword?: string; status?: string; priority?: string };
+export type TaskCreate = { title: string; description?: string; priority: ApiTask["priority"]; due_date?: string };
+export type TaskUpdate = Partial<Pick<ApiTask, "title" | "description" | "status" | "priority" | "due_date">>;
+
+export function listTasks(search: TaskSearch = {}) {
+  const params = new URLSearchParams();
+  Object.entries(search).forEach(([k, v]) => { if (v) params.set(k, v); });
+  const qs = params.toString();
+  return qs
+    ? apiRequest<ApiTask[]>(`/tasks/search?${qs}`)
+    : apiRequest<ApiTask[]>("/tasks/?limit=100&offset=0");
+}
+export const createTask = (body: TaskCreate) => apiRequest<ApiTask>("/tasks/", { method: "POST", json: body });
+export const updateTask = (id: ApiTask["id"], body: TaskUpdate) => apiRequest<ApiTask>(`/tasks/${id}`, { method: "PUT", json: body });
+export const deleteTask = (id: ApiTask["id"]) => apiRequest<void>(`/tasks/${id}`, { method: "DELETE" });
