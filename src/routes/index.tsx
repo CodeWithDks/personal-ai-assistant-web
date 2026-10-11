@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { FieldError } from "@/components/StatusBlocks";
+import { ErrorNotice, FieldError } from "@/components/StatusBlocks";
+import { clearSession, getToken, login, onUnauthorized, onWakingChange, pingHealth, register, setToken, ApiError } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,6 +35,7 @@ function Index() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState<boolean | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [waking, setWaking] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("personal-ai-theme");
@@ -54,8 +56,31 @@ function Index() {
     setMobileOpen(false);
   };
 
+  useEffect(() => {
+    void pingHealth();
+    setIsLoggedIn(Boolean(getToken()));
+    const offUnauth = onUnauthorized(() => setIsLoggedIn(false));
+    const offWaking = onWakingChange(setWaking);
+    return () => {
+      offUnauth();
+      offWaking();
+    };
+  }, []);
+
+  const logout = () => {
+    clearSession();
+    setMode("chat");
+    setIsLoggedIn(false);
+  };
+
+  const wakingBanner = waking && (
+    <div role="status" className="animate-mode-enter fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-mono text-[11px] text-muted-foreground shadow-sm">
+      <LoaderCircle className="size-3.5 animate-spin text-warning" /> Waking up the server...
+    </div>
+  );
+
   if (!isLoggedIn) {
-    return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
+    return <>{<AuthScreen onLogin={() => setIsLoggedIn(true)} />}{wakingBanner}</>;
   }
 
   return (
