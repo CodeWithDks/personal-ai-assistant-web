@@ -118,7 +118,7 @@ function Index() {
                 <span className="absolute left-1 top-1 size-5 rounded-full bg-card shadow-sm transition-transform duration-300 aria-checked:translate-x-5" />
               </button>
             </div>
-            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={() => setIsLoggedIn(false)}>
+            <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={logout}>
               <LogOut /> Log out
             </Button>
           </div>
@@ -170,11 +170,13 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [errors, setErrors] = useState<AuthErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const selectMode = (nextMode: AuthMode) => {
     if (submitting || nextMode === authMode) return;
     setAuthMode(nextMode);
     setErrors({});
+    setServerError(null);
     setRegistered(false);
   };
 
@@ -183,7 +185,8 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
     if (!email.trim()) nextErrors.email = "Enter your email address.";
     else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
     if (!password) nextErrors.password = "Enter your password.";
-    else if (authMode === "register" && password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else if (password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    else if (password.length > 72) nextErrors.password = "Use 72 characters or fewer.";
     if (authMode === "register" && !confirmPassword) nextErrors.confirmPassword = "Confirm your password.";
     else if (authMode === "register" && password !== confirmPassword) nextErrors.confirmPassword = "Passwords don't match.";
     setErrors(nextErrors);
@@ -192,12 +195,20 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setServerError(null);
     if (!validate()) return;
     setSubmitting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 750));
-
-    if (authMode === "login") {
-      onLogin();
+    try {
+      if (authMode === "login") {
+        const { access_token } = await login(email.trim(), password);
+        setToken(access_token);
+        onLogin();
+        return;
+      }
+      await register(email.trim(), password);
+    } catch (err) {
+      setServerError(err instanceof ApiError ? err.message : "Couldn't reach the server. Please try again.");
+      setSubmitting(false);
       return;
     }
 
