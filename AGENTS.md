@@ -11,5 +11,5 @@
 
 ## Project architecture
 
-- Keep the first release frontend-only with local React state and no authentication or persistence beyond theme preference, because backend features are intentionally deferred.
+- All backend calls go through `src/lib/api.ts` (base URL only in `src/lib/config.ts`) against the external REST API; never use Lovable Cloud/Supabase, because the backend is a separate service the user owns.
 - Use semantic Tailwind tokens from `src/styles.css` for all visual colors and typography, so light and dark themes remain coherent.
