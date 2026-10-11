@@ -65,7 +65,7 @@ type RequestOpts = { method?: string; json?: unknown; form?: Record<string, stri
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  let body: BodyInit | undefined;
+  let body: BodyInit | null = null;
   if (opts.json !== undefined) {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.json);
@@ -75,7 +75,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
   if (!path.startsWith("/auth/")) {
     const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
