@@ -272,6 +272,7 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
                 </div>
               </div>
 
+              {serverError && <ErrorNotice title={serverError} variant={serverError.startsWith("Couldn't reach") ? "offline" : "error"} />}
               <Button type="submit" size="lg" className="mt-1 w-full transition-transform active:scale-[0.98]" disabled={submitting}>
                 {submitting ? <><LoaderCircle className="animate-spin" /> {authMode === "login" ? "Signing in…" : "Creating account…"}</> : authMode === "login" ? "Sign in" : "Create account"}
               </Button>
