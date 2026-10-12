@@ -148,3 +148,16 @@ export function listTasks(search: TaskSearch = {}) {
 export const createTask = (body: TaskCreate) => apiRequest<ApiTask>("/tasks/", { method: "POST", json: body });
 export const updateTask = (id: ApiTask["id"], body: TaskUpdate) => apiRequest<ApiTask>(`/tasks/${id}`, { method: "PUT", json: body });
 export const deleteTask = (id: ApiTask["id"]) => apiRequest<void>(`/tasks/${id}`, { method: "DELETE" });
+
+/* ---------- notes ---------- */
+export type ApiNote = { id: number | string; title: string | null; content: string; created_at: string };
+export type NoteCreate = { title?: string; content: string };
+export type NoteUpdate = { title?: string; content?: string };
+
+export const listNotes = (keyword = "") =>
+  keyword
+    ? apiRequest<ApiNote[]>(`/notes/search?${new URLSearchParams({ keyword }).toString()}`)
+    : apiRequest<ApiNote[]>("/notes/?limit=100&offset=0");
+export const createNote = (body: NoteCreate) => apiRequest<ApiNote>("/notes/", { method: "POST", json: body });
+export const updateNote = (id: ApiNote["id"], body: NoteUpdate) => apiRequest<ApiNote>(`/notes/${id}`, { method: "PUT", json: body });
+export const deleteNote = (id: ApiNote["id"]) => apiRequest<void>(`/notes/${id}`, { method: "DELETE" });
