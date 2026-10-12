@@ -1,11 +1,14 @@
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, NotebookPen, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { CalendarDays, Check, ChevronDown, Loader2, ChevronLeft, ChevronRight, NotebookPen, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { FieldError, ListSkeleton, useMockLoading } from "@/components/StatusBlocks";
+import { ErrorNotice, FieldError, ListSkeleton } from "@/components/StatusBlocks";
+import { NOTES_KEY, useNotes } from "@/hooks/use-notes";
+import { ApiError, createNote, deleteNote, updateNote, type ApiNote, type NoteCreate, type NoteUpdate } from "@/lib/api";
 
 type Note = { id: string; title?: string | undefined; content: string; createdAt: number };
 
@@ -14,84 +17,40 @@ const PAGE_SIZE = 10;
 const formatDate = (timestamp: number) =>
   new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-const seedNotes = (): Note[] => {
-  const now = Date.now();
-  const daysAgo = (days: number) => now - days * 24 * 60 * 60 * 1000;
-  return [
-    {
-      id: "n1",
-      title: "Ideas for the home office",
-      content:
-        "Move the desk closer to the window for morning light.\nSwap the bookshelf with the plant stand — it blocks less light that way.\nLook into a small air purifier; the dust collects fast near the printer.\nMaybe a pinboard for postcards instead of sticky notes everywhere.",
-      createdAt: daysAgo(1),
-    },
-    {
-      id: "n2",
-      title: "Reading list",
-      content:
-        "The Wager — read the first half, resume after the trip.\nSlow productivity essay series (someone recommended the third one).\nInterview notes from Maya's team — skim before Friday.\nAudiobook idea: anything by Ursula K. Le Guin.",
-      createdAt: daysAgo(3),
-    },
-    {
-      id: "n3",
-      content:
-        "The café on the corner does an oat flat white that's better than I expected. Went back twice this week already. Try their cardamom bun next time — the barista says they sell out by eleven.",
-      createdAt: daysAgo(4),
-    },
-    {
-      id: "n4",
-      title: "Bike maintenance",
-      content:
-        "Chain needs oiling — it's been squeaking for a week.\nRear brake feels soft; have it checked before the weekend ride.\nPump both tires (front was at 2.1 bar, probably lower now).",
-      createdAt: daysAgo(6),
-    },
-    {
-      id: "n5",
-      content: "Call Aunt Meera on Sunday evening — she's flying back from Bangalore on Saturday. Ask about the mangoes.",
-      createdAt: daysAgo(9),
-    },
-    {
-      id: "n6",
-      title: "Trip packing",
-      content:
-        "Documents: passport, insurance card, printed bookings.\nElectronics: chargers, adapter, power bank, headphones.\nClothes for two climates — layers, light rain jacket.\nLeave space in the bag for gifts on the way back.",
-      createdAt: daysAgo(12),
-    },
-  ];
-};
+const fromApi = (n: ApiNote): Note => ({ id: String(n.id), title: n.title ?? undefined, content: n.content, createdAt: new Date(n.created_at).getTime() });
 
 export function NotesScreen() {
-  const [notes, setNotes] = useState<Note[]>(seedNotes);
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
-  const [leaving, setLeaving] = useState<Set<string>>(new Set());
-  const loading = useMockLoading();
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState("");
+  useEffect(() => { const t = setTimeout(() => setKeyword(query.trim()), 300); return () => clearTimeout(t); }, [query]);
+  const notesQuery = useNotes(keyword);
+  const loading = notesQuery.isPending;
+  const refetch = () => queryClient.invalidateQueries({ queryKey: NOTES_KEY });
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = notes.filter((n) => !q || n.title?.toLowerCase().includes(q) || n.content.toLowerCase().includes(q));
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [notes, query]);
+  const visible = useMemo(() => (notesQuery.data ?? []).map(fromApi).sort((a, b) => b.createdAt - a.createdAt), [notesQuery.data]);
+  const searching = Boolean(keyword);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageItems = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const remove = (id: string) => {
-    setLeaving((s) => new Set([...s, id]));
-    window.setTimeout(() => {
-      setNotes((ns) => ns.filter((n) => n.id !== id));
-      setLeaving((s) => {
-        const next = new Set(s);
-        next.delete(id);
-        return next;
-      });
-    }, 260);
+  const runOnCard = async (id: string, fn: () => Promise<unknown>) => {
+    setBusy((s) => new Set([...s, id]));
+    setActionError("");
+    try { await fn(); await refetch(); }
+    catch (e) { setActionError(e instanceof Error ? e.message : "Request failed. Please try again."); }
+    finally { setBusy((s) => { const next = new Set(s); next.delete(id); return next; }); }
   };
+
+  const add = async (body: NoteCreate) => { await createNote(body); setPage(1); await refetch(); };
 
   return (
     <div className="space-y-5">
-      <AddNoteForm onAdd={(note) => { setNotes((ns) => [note, ...ns]); setPage(1); }} />
+      <AddNoteForm onAdd={add} />
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -106,13 +65,17 @@ export function NotesScreen() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {visible.length} shown · {notes.length} saved
+          {visible.length} {searching ? "found" : "saved"}
         </p>
       </div>
 
+      {actionError && <ErrorNotice title={actionError} onRetry={() => { setActionError(""); void refetch(); }} />}
+
       {loading ? (
         <ListSkeleton label="Loading notes" />
-      ) : notes.length === 0 ? (
+      ) : notesQuery.isError ? (
+        <ErrorNotice variant={notesQuery.error instanceof ApiError && notesQuery.error.status === 0 ? "offline" : "error"} title="Couldn't load your notes." body={notesQuery.error.message} onRetry={() => void notesQuery.refetch()} />
+      ) : visible.length === 0 && !searching ? (
         <EmptyBlock
           icon={<NotebookPen className="size-7 text-primary" strokeWidth={1.5} />}
           title="No notes yet"
@@ -122,13 +85,13 @@ export function NotesScreen() {
         <EmptyBlock
           icon={<SearchX className="size-7 text-primary" strokeWidth={1.5} />}
           title="Nothing matches"
-          body={`No notes contain “${query.trim()}”. Try a different word or start over.`}
-          action={<Button variant="outline" size="sm" onClick={() => { setQuery(""); setPage(1); }}>Clear search</Button>}
+          body={`No notes contain “${keyword}”. Try a different word or start over.`}
+          action={<Button variant="outline" size="sm" onClick={() => { setQuery(""); setKeyword(""); setPage(1); }}>Clear search</Button>}
         />
       ) : (
         <ul className="space-y-3">
           {pageItems.map((note) => (
-            <NoteCard key={note.id} note={note} leaving={leaving.has(note.id)} onUpdate={(p) => setNotes((ns) => ns.map((n) => (n.id === note.id ? { ...n, ...p } : n)))} onDelete={() => remove(note.id)} />
+            <NoteCard key={note.id} note={note} busy={busy.has(note.id)} onUpdate={(p) => runOnCard(note.id, () => updateNote(note.id, p))} onDelete={() => runOnCard(note.id, () => deleteNote(note.id))} />
           ))}
         </ul>
       )}
@@ -144,18 +107,28 @@ export function NotesScreen() {
   );
 }
 
-function AddNoteForm({ onAdd }: { onAdd: (note: Note) => void }) {
+function AddNoteForm({ onAdd }: { onAdd: (body: NoteCreate) => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     const c = content.trim();
     if (!c) { setError("Write something before saving the note."); return; }
-    onAdd({ id: crypto.randomUUID(), title: title.trim().slice(0, 200) || undefined, content: c.slice(0, 5000), createdAt: Date.now() });
-    setTitle(""); setContent(""); setError(""); setOpen(false);
+    const t = title.trim().slice(0, 200);
+    const body: NoteCreate = { content: c.slice(0, 5000) };
+    if (t) body.title = t;
+    setSaving(true);
+    try {
+      await onAdd(body);
+      setTitle(""); setContent(""); setError(""); setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save the note. Please try again.");
+    } finally { setSaving(false); }
   };
 
   return (
@@ -190,7 +163,7 @@ function AddNoteForm({ onAdd }: { onAdd: (note: Note) => void }) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => { setOpen(false); setError(""); }}>Cancel</Button>
-              <Button type="submit" className="active:scale-[0.98]"><Plus /> Save note</Button>
+              <Button type="submit" disabled={saving} className="active:scale-[0.98]">{saving ? <Loader2 className="animate-spin" /> : <Plus />} Save note</Button>
             </div>
           </form>
         </div>
@@ -199,7 +172,7 @@ function AddNoteForm({ onAdd }: { onAdd: (note: Note) => void }) {
   );
 }
 
-function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: boolean; onUpdate: (p: Partial<Note>) => void; onDelete: () => void }) {
+function NoteCard({ note, busy, onUpdate, onDelete }: { note: Note; busy: boolean; onUpdate: (p: NoteUpdate) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(note.title ?? "");
   const [draftContent, setDraftContent] = useState(note.content);
@@ -216,12 +189,16 @@ function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: 
   const save = () => {
     const c = draftContent.trim();
     if (!c) { setError("The note can't be empty."); return; }
-    onUpdate({ title: draftTitle.trim().slice(0, 200) || undefined, content: c.slice(0, 5000) });
+    const patch: NoteUpdate = {};
+    const t = draftTitle.trim().slice(0, 200);
+    if (t !== (note.title ?? "")) patch.title = t;
+    if (c.slice(0, 5000) !== note.content) patch.content = c.slice(0, 5000);
     setEditing(false);
+    if (Object.keys(patch).length) onUpdate(patch);
   };
 
   return (
-    <li className={cn("animate-task-in group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:shadow-md", leaving && "animate-task-out")}>
+    <li className={cn("animate-task-in group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:shadow-md", busy && "pointer-events-none opacity-60")} aria-busy={busy}>
       {editing ? (
         <div className="animate-form-swap space-y-3">
           <Input aria-label="Note title" autoFocus value={draftTitle} maxLength={200} placeholder="Title (optional)" onChange={(e) => setDraftTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }} className="h-9 bg-background" />
@@ -250,12 +227,12 @@ function NoteCard({ note, leaving, onUpdate, onDelete }: { note: Note; leaving: 
           <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-foreground/90">{note.content}</p>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-              <CalendarDays className="size-3" /> {formatDate(note.createdAt)}
+              {busy ? <Loader2 className="size-3 animate-spin" /> : <CalendarDays className="size-3" />} {formatDate(note.createdAt)}
             </span>
             <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:transition-opacity sm:duration-200 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
               {confirming ? (
                 <div className="animate-form-swap flex gap-1">
-                  <Button size="sm" variant="destructive" onClick={onDelete}>Confirm</Button>
+                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => { setConfirming(false); onDelete(); }}>Confirm</Button>
                   <Button size="sm" variant="ghost" aria-label="Cancel delete" onClick={() => setConfirming(false)}><X /></Button>
                 </div>
               ) : (
