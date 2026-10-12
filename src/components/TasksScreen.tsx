@@ -1,12 +1,15 @@
 import { NotesScreen } from "@/components/NotesScreen";
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleCheck, Flag, ListChecks, NotebookPen, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleCheck, Flag, ListChecks, Loader2, NotebookPen, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { FieldError, ListSkeleton, useMockLoading } from "@/components/StatusBlocks";
+import { ErrorNotice, FieldError, ListSkeleton } from "@/components/StatusBlocks";
+import { TASKS_KEY, useTasks } from "@/hooks/use-tasks";
+import { ApiError, createTask, deleteTask, updateTask, type ApiTask, type TaskCreate, type TaskUpdate } from "@/lib/api";
 
 type Priority = "low" | "medium" | "high";
 type Status = "pending" | "completed";
@@ -15,30 +18,20 @@ type Task = { id: string; title: string; description?: string | undefined; prior
 const PAGE_SIZE = 10;
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
-const todayISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-const offsetISO = (days: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+const localISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayISO = () => localISO(new Date());
 const formatDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-const seedTasks = (): Task[] => {
-  const now = Date.now();
-  return [
-    { id: "t1", title: "Send quarterly report to Priya", description: "Include the revised budget figures.", priority: "high", status: "pending", dueDate: offsetISO(-2), createdAt: now - 8e6 },
-    { id: "t2", title: "Book dentist appointment", priority: "medium", status: "pending", dueDate: todayISO(), createdAt: now - 7e6 },
-    { id: "t3", title: "Read chapter 4 of Deep Work", description: "Take notes on attention residue.", priority: "low", status: "pending", createdAt: now - 6e6 },
-    { id: "t4", title: "Prepare slides for Friday demo", priority: "high", status: "pending", dueDate: offsetISO(3), createdAt: now - 5e6 },
-    { id: "t5", title: "Renew gym membership", priority: "low", status: "completed", dueDate: offsetISO(-5), createdAt: now - 4e6 },
-    { id: "t6", title: "Reply to landlord about repairs", priority: "medium", status: "pending", dueDate: offsetISO(1), createdAt: now - 3e6 },
-    { id: "t7", title: "Plan weekend hike route", description: "Check the weather first.", priority: "low", status: "pending", dueDate: offsetISO(6), createdAt: now - 2e6 },
-    { id: "t8", title: "Pay electricity bill", priority: "high", status: "completed", dueDate: offsetISO(-1), createdAt: now - 1e6 },
-  ];
-};
+/** API task -> view task; due date reduced to the user's local calendar date. */
+const fromApi = (t: ApiTask): Task => ({
+  id: String(t.id),
+  title: t.title,
+  description: t.description ?? undefined,
+  priority: t.priority,
+  status: t.status === "completed" ? "completed" : "pending",
+  dueDate: t.due_date ? localISO(new Date(t.due_date)) : undefined,
+  createdAt: new Date(t.created_at).getTime(),
+});
 
 const priorityStyles: Record<Priority, string> = {
   high: "border-destructive/30 bg-destructive/10 text-destructive",
@@ -69,25 +62,29 @@ export function OrganizeScreen() {
 }
 
 function TasksScreen() {
-  const [tasks, setTasks] = useState<Task[]>(seedTasks);
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | Priority>("all");
   const [sort, setSort] = useState<"due" | "priority" | "newest">("due");
   const [page, setPage] = useState(1);
-  const [leaving, setLeaving] = useState<Set<string>>(new Set());
-  const loading = useMockLoading();
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  useEffect(() => { const t = setTimeout(() => setKeyword(query.trim()), 300); return () => clearTimeout(t); }, [query]);
+
+  const tasksQuery = useTasks({ keyword, status: statusFilter === "all" ? "" : statusFilter, priority: priorityFilter === "all" ? "" : priorityFilter });
+  const tasks = useMemo(() => (tasksQuery.data ?? []).map(fromApi), [tasksQuery.data]);
+  const loading = tasksQuery.isPending;
+  const filtering = Boolean(keyword) || statusFilter !== "all" || priorityFilter !== "all";
 
   const today = todayISO();
+  const refetch = () => queryClient.invalidateQueries({ queryKey: TASKS_KEY });
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = tasks.filter((t) =>
-      (statusFilter === "all" || t.status === statusFilter) &&
-      (priorityFilter === "all" || t.priority === priorityFilter) &&
-      (!q || t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q)),
-    );
-    return [...list].sort((a, b) => {
+    return [...tasks].sort((a, b) => {
       if (sort === "newest") return b.createdAt - a.createdAt;
       if (sort === "priority") return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || b.createdAt - a.createdAt;
       if (!a.dueDate && !b.dueDate) return b.createdAt - a.createdAt;
@@ -95,7 +92,7 @@ function TasksScreen() {
       if (!b.dueDate) return -1;
       return a.dueDate.localeCompare(b.dueDate);
     });
-  }, [tasks, query, statusFilter, priorityFilter, sort]);
+  }, [tasks, sort]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -104,20 +101,37 @@ function TasksScreen() {
   const pendingCount = tasks.filter((t) => t.status === "pending").length;
   const completedCount = tasks.length - pendingCount;
 
-  const update = (id: string, patch: Partial<Task>) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const removeIds = (ids: string[]) => {
-    if (!ids.length) return;
-    setLeaving((s) => new Set([...s, ...ids]));
-    window.setTimeout(() => {
-      setTasks((ts) => ts.filter((t) => !ids.includes(t.id)));
-      setLeaving((s) => { const n = new Set(s); ids.forEach((i) => n.delete(i)); return n; });
-    }, 260);
+  const runOnCard = async (id: string, fn: () => Promise<unknown>) => {
+    setBusy((s) => new Set(s).add(id));
+    setActionError("");
+    try { await fn(); } catch (e) { setActionError(e instanceof Error ? e.message : "Request failed."); }
+    finally {
+      await refetch();
+      setBusy((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
   };
-  const resetFilters = () => { setQuery(""); setStatusFilter("all"); setPriorityFilter("all"); setPage(1); };
+  const update = (id: string, patch: TaskUpdate) => { if (Object.keys(patch).length) void runOnCard(id, () => updateTask(id, patch)); };
+  const remove = (id: string) => void runOnCard(id, () => deleteTask(id));
+  const bulk = async (ids: string[], fn: (id: string) => Promise<unknown>) => {
+    if (!ids.length) return;
+    setBulkBusy(true); setActionError("");
+    const results = await Promise.allSettled(ids.map(fn));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    await refetch();
+    setBulkBusy(false);
+    if (failed) setActionError(`${failed} of ${ids.length} failed.`);
+  };
+  const addTask = async (body: TaskCreate) => {
+    await createTask(body);
+    await refetch();
+    setPage(1);
+  };
+  const resetFilters = () => { setQuery(""); setKeyword(""); setStatusFilter("all"); setPriorityFilter("all"); setPage(1); };
 
   return (
     <div className="space-y-5">
-      <AddTaskForm onAdd={(t) => { setTasks((ts) => [t, ...ts]); setPage(1); }} />
+      <AddTaskForm onAdd={addTask} />
+      {actionError && <ErrorNotice title={actionError} onRetry={() => { setActionError(""); void refetch(); }} />}
 
       <div className="grid gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 md:grid-cols-[1fr_auto_auto_auto]">
         <div className="relative">
@@ -140,10 +154,10 @@ function TasksScreen() {
           {visible.length} shown · {pendingCount} pending · {completedCount} done
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" disabled={pendingCount === 0} onClick={() => setTasks((ts) => ts.map((t) => ({ ...t, status: "completed" })))}>
+          <Button variant="outline" size="sm" disabled={pendingCount === 0 || bulkBusy} onClick={() => void bulk(tasks.filter((t) => t.status === "pending").map((t) => t.id), (id) => updateTask(id, { status: "completed" }))}>
             <CircleCheck /> Mark all done <span className="font-mono text-xs text-muted-foreground">({pendingCount})</span>
           </Button>
-          <Button variant="outline" size="sm" className="hover:text-destructive" disabled={completedCount === 0} onClick={() => removeIds(tasks.filter((t) => t.status === "completed").map((t) => t.id))}>
+          <Button variant="outline" size="sm" className="hover:text-destructive" disabled={completedCount === 0 || bulkBusy} onClick={() => void bulk(tasks.filter((t) => t.status === "completed").map((t) => t.id), deleteTask)}>
             <Trash2 /> Delete completed <span className="font-mono text-xs text-muted-foreground">({completedCount})</span>
           </Button>
         </div>
@@ -151,14 +165,16 @@ function TasksScreen() {
 
       {loading ? (
         <ListSkeleton label="Loading tasks" />
-      ) : tasks.length === 0 ? (
+      ) : tasksQuery.isError && !tasksQuery.data ? (
+        <ErrorNotice variant={tasksQuery.error instanceof ApiError && tasksQuery.error.status === 0 ? "offline" : "error"} title="Couldn't load your tasks." body={tasksQuery.error.message} onRetry={() => void tasksQuery.refetch()} />
+      ) : tasks.length === 0 && !filtering ? (
         <EmptyBlock icon={<ListChecks className="size-7 text-primary" strokeWidth={1.5} />} title="No tasks yet" body="Add your first task above to start planning your day." />
       ) : visible.length === 0 ? (
         <EmptyBlock icon={<SearchX className="size-7 text-primary" strokeWidth={1.5} />} title="Nothing matches" body="No tasks fit your current search or filters." action={<Button variant="outline" size="sm" onClick={resetFilters}>Clear filters</Button>} />
       ) : (
         <ul className="space-y-3">
           {pageItems.map((task) => (
-            <TaskCard key={task.id} task={task} today={today} leaving={leaving.has(task.id)} onUpdate={(p) => update(task.id, p)} onDelete={() => removeIds([task.id])} />
+            <TaskCard key={task.id} task={task} today={today} busy={busy.has(task.id) || bulkBusy} onUpdate={(p) => update(task.id, p)} onDelete={() => remove(task.id)} />
           ))}
         </ul>
       )}
@@ -174,7 +190,8 @@ function TasksScreen() {
   );
 }
 
-function AddTaskForm({ onAdd }: { onAdd: (task: Task) => void }) {
+function AddTaskForm({ onAdd }: { onAdd: (task: TaskCreate) => Promise<void> }) {
+  const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -182,12 +199,17 @@ function AddTaskForm({ onAdd }: { onAdd: (task: Task) => void }) {
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     const t = title.trim();
     if (!t) { setError("Give your task a title."); return; }
     if (t.length > 200) { setError("Keep the title under 200 characters."); return; }
-    onAdd({ id: crypto.randomUUID(), title: t, description: description.trim().slice(0, 1000) || undefined, priority, status: "pending", dueDate: dueDate || undefined, createdAt: Date.now() });
+    const body: TaskCreate = { title: t, priority };
+    const desc = description.trim().slice(0, 1000);
+    if (desc) body.description = desc;
+    if (dueDate) body.due_date = new Date(`${dueDate}T00:00:00`).toISOString();
+    setSubmitting(true);
+    try { await onAdd(body); } catch (err) { setError(err instanceof Error ? err.message : "Couldn't add the task."); return; } finally { setSubmitting(false); }
     setTitle(""); setDescription(""); setPriority("medium"); setDueDate(""); setError(""); setOpen(false);
   };
 
@@ -224,7 +246,7 @@ function AddTaskForm({ onAdd }: { onAdd: (task: Task) => void }) {
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => { setOpen(false); setError(""); }}>Cancel</Button>
-              <Button type="submit" className="active:scale-[0.98]"><Plus /> Add task</Button>
+              <Button type="submit" disabled={submitting} className="active:scale-[0.98]">{submitting ? <Loader2 className="animate-spin" /> : <Plus />} Add task</Button>
             </div>
           </form>
         </div>
@@ -233,7 +255,7 @@ function AddTaskForm({ onAdd }: { onAdd: (task: Task) => void }) {
   );
 }
 
-function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; today: string; leaving: boolean; onUpdate: (p: Partial<Task>) => void; onDelete: () => void }) {
+function TaskCard({ task, today, busy, onUpdate, onDelete }: { task: Task; today: string; busy: boolean; onUpdate: (p: TaskUpdate) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(task.title);
   const [draftPriority, setDraftPriority] = useState<Priority>(task.priority);
@@ -245,16 +267,19 @@ function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; to
   const save = () => {
     const t = draftTitle.trim();
     if (!t) return;
-    onUpdate({ title: t.slice(0, 200), priority: draftPriority });
+    const patch: TaskUpdate = {};
+    if (t.slice(0, 200) !== task.title) patch.title = t.slice(0, 200);
+    if (draftPriority !== task.priority) patch.priority = draftPriority;
+    onUpdate(patch);
     setEditing(false);
   };
 
   return (
-    <li className={cn("animate-task-in group relative overflow-hidden rounded-lg border bg-card pl-4 pr-3 py-3.5 shadow-sm transition-all duration-300 hover:shadow-md", overdue ? "border-destructive/40" : "border-border", done && "opacity-75", leaving && "animate-task-out")}>
+    <li className={cn("animate-task-in group relative overflow-hidden rounded-lg border bg-card pl-4 pr-3 py-3.5 shadow-sm transition-all duration-300 hover:shadow-md", overdue ? "border-destructive/40" : "border-border", done && "opacity-75", busy && "pointer-events-none opacity-60")} aria-busy={busy}>
       <span className={cn("absolute inset-y-0 left-0 w-1", priorityBar[task.priority])} />
       <div className="flex items-start gap-3">
-        <button type="button" aria-label={done ? "Mark as pending" : "Mark as done"} onClick={() => onUpdate({ status: done ? "pending" : "completed" })} className={cn("mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 active:scale-90", done ? "border-success bg-success text-primary-foreground" : "border-border hover:border-primary")}>
-          {done && <Check className="size-3" strokeWidth={3} />}
+        <button type="button" disabled={busy} aria-label={done ? "Mark as pending" : "Mark as done"} onClick={() => onUpdate({ status: done ? "pending" : "completed" })} className={cn("mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 active:scale-90", done ? "border-success bg-success text-primary-foreground" : "border-border hover:border-primary")}>
+          {busy ? <Loader2 className="size-3 animate-spin" /> : done && <Check className="size-3" strokeWidth={3} />}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -290,14 +315,14 @@ function TaskCard({ task, today, leaving, onUpdate, onDelete }: { task: Task; to
           <div className="flex shrink-0 items-center gap-0.5">
             {confirming ? (
               <div className="animate-form-swap flex gap-1">
-                <Button size="sm" variant="destructive" onClick={onDelete}>Confirm</Button>
+                <Button size="sm" variant="destructive" disabled={busy} onClick={() => { setConfirming(false); onDelete(); }}>Confirm</Button>
                 <Button size="sm" variant="ghost" aria-label="Cancel delete" onClick={() => setConfirming(false)}><X /></Button>
               </div>
             ) : (
               <>
-                {!done && <Button size="icon" variant="ghost" aria-label="Quick mark done" className="size-10 hover:text-success sm:size-8" onClick={() => onUpdate({ status: "completed" })}><CircleCheck /></Button>}
-                <Button size="icon" variant="ghost" aria-label="Edit task" className="size-10 sm:size-8" onClick={() => { setDraftTitle(task.title); setDraftPriority(task.priority); setEditing(true); }}><Pencil /></Button>
-                <Button size="icon" variant="ghost" aria-label="Delete task" className="size-10 hover:text-destructive sm:size-8" onClick={() => setConfirming(true)}><Trash2 /></Button>
+                {!done && <Button size="icon" variant="ghost" disabled={busy} aria-label="Quick mark done" className="size-10 hover:text-success sm:size-8" onClick={() => onUpdate({ status: "completed" })}><CircleCheck /></Button>}
+                <Button size="icon" variant="ghost" disabled={busy} aria-label="Edit task" className="size-10 sm:size-8" onClick={() => { setDraftTitle(task.title); setDraftPriority(task.priority); setEditing(true); }}><Pencil /></Button>
+                <Button size="icon" variant="ghost" disabled={busy} aria-label="Delete task" className="size-10 hover:text-destructive sm:size-8" onClick={() => setConfirming(true)}><Trash2 /></Button>
               </>
             )}
           </div>
