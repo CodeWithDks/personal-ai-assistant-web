@@ -61,7 +61,7 @@ export function messageFor(status: number, path: string, detail: Detail): string
 const NETWORK_MSG = "Couldn't reach the server. Please try again.";
 
 /* ---------- request ---------- */
-type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; silent?: boolean };
+type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; silent?: boolean; noTimeout?: boolean };
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -79,7 +79,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = opts.noTimeout ? undefined : setTimeout(() => controller.abort(), TIMEOUT_MS);
   let slow = false;
   const slowTimer = opts.silent
     ? undefined
@@ -161,3 +161,8 @@ export const listNotes = (keyword = "") =>
 export const createNote = (body: NoteCreate) => apiRequest<ApiNote>("/notes/", { method: "POST", json: body });
 export const updateNote = (id: ApiNote["id"], body: NoteUpdate) => apiRequest<ApiNote>(`/notes/${id}`, { method: "PUT", json: body });
 export const deleteNote = (id: ApiNote["id"]) => apiRequest<void>(`/notes/${id}`, { method: "DELETE" });
+
+/* ---------- chat ---------- */
+/** Sends only the new message; the server keeps the conversation memory. No timeout: replies can take 30s+. */
+export const sendChat = (message: string) =>
+  apiRequest<{ reply: string }>("/chat/", { method: "POST", json: { message }, noTimeout: true });
