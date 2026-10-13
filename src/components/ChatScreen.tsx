@@ -10,7 +10,7 @@ import { ApiError, sendChat, sendVoice } from "@/lib/api";
 import { NOTES_KEY } from "@/hooks/use-notes";
 import { TASKS_KEY } from "@/hooks/use-tasks";
 
-type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; voice?: boolean; audio?: string; error?: { message: string; offline: boolean } | undefined };
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; voice?: boolean; audio?: string | undefined; error?: { message: string; offline: boolean } | undefined };
 
 const MAX_LEN = 2000;
 const COUNTER_AT = 1800;
