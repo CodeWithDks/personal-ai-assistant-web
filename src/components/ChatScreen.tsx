@@ -10,7 +10,7 @@ import { ApiError, sendChat } from "@/lib/api";
 import { NOTES_KEY } from "@/hooks/use-notes";
 import { TASKS_KEY } from "@/hooks/use-tasks";
 
-type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; error?: { message: string; offline: boolean } };
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; error?: { message: string; offline: boolean } | undefined };
 
 const MAX_LEN = 2000;
 const COUNTER_AT = 1800;
@@ -121,7 +121,7 @@ export function ChatScreen() {
                   <p className="mt-1 px-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{m.role === "user" ? "You" : "Assistant"} · {m.time}</p>
                   {m.error && (
                     <div className="mt-2 text-left">
-                      <ErrorNotice variant={m.error.offline ? "offline" : "error"} title={m.error.message} onRetry={thinking ? undefined : () => retry(m)} />
+                      <ErrorNotice variant={m.error.offline ? "offline" : "error"} title={m.error.message} onRetry={() => retry(m)} />
                     </div>
                   )}
                 </div>
