@@ -61,12 +61,15 @@ export function messageFor(status: number, path: string, detail: Detail): string
 const NETWORK_MSG = "Couldn't reach the server. Please try again.";
 
 /* ---------- request ---------- */
-type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; silent?: boolean; noTimeout?: boolean };
+type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; multipart?: FormData; silent?: boolean; noTimeout?: boolean };
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   let body: BodyInit | null = null;
-  if (opts.json !== undefined) {
+  if (opts.multipart) {
+    // No Content-Type: the browser adds multipart/form-data with its boundary.
+    body = opts.multipart;
+  } else if (opts.json !== undefined) {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.json);
   } else if (opts.form) {
@@ -166,3 +169,11 @@ export const deleteNote = (id: ApiNote["id"]) => apiRequest<void>(`/notes/${id}`
 /** Sends only the new message; the server keeps the conversation memory. No timeout: replies can take 30s+. */
 export const sendChat = (message: string) =>
   apiRequest<{ reply: string }>("/chat/", { method: "POST", json: { message }, noTimeout: true });
+
+export type VoiceReply = { transcript: string; reply: string; audio_base64: string };
+/** Uploads one recorded clip as multipart field "audio". */
+export function sendVoice(file: Blob, filename: string) {
+  const fd = new FormData();
+  fd.append("audio", file, filename);
+  return apiRequest<VoiceReply>("/chat/voice", { method: "POST", multipart: fd, noTimeout: true });
+}
