@@ -10,7 +10,42 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ErrorNotice, FieldError } from "@/components/StatusBlocks";
-import { clearSession, getToken, login, onUnauthorized, onWakingChange, pingHealth, register, setToken, ApiError } from "@/lib/api";
+import { clearSession, getToken, login, onUnauthorized, onWakingChange, register, setToken, ApiError } from "@/lib/api";
+import { checkHealth, startServerStatus, useServerStatus, type ServerStatus } from "@/lib/serverStatus";
+
+const STATUS_LABEL: Record<ServerStatus, string> = {
+  checking: "Checking server...",
+  online: "Online",
+  waking: "Waking up the server...",
+  offline: "Offline",
+};
+const STATUS_DOT: Record<ServerStatus, string> = {
+  checking: "bg-muted-foreground/50",
+  online: "bg-success",
+  waking: "bg-warning animate-pulse",
+  offline: "bg-destructive",
+};
+
+function ServerStatusPill() {
+  const { status, lastContact } = useServerStatus();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const title = lastContact ? `Last contact: ${Math.max(0, Math.round((now - lastContact) / 1000))}s ago` : "Last contact: never";
+  return (
+    <span role="status" aria-live="polite" title={title} className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1">
+      <span aria-hidden className={cn("size-1.5 rounded-full", STATUS_DOT[status])} />
+      {STATUS_LABEL[status]}
+      {status === "offline" && (
+        <button type="button" onClick={() => void checkHealth()} className="ml-1 rounded px-1.5 py-0.5 uppercase text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Retry
+        </button>
+      )}
+    </span>
+  );
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,6 +71,7 @@ function Index() {
   const [dark, setDark] = useState<boolean | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [waking, setWaking] = useState(false);
+  const { status: serverStatus } = useServerStatus();
 
   useEffect(() => {
     const saved = window.localStorage.getItem("personal-ai-theme");
@@ -57,11 +93,12 @@ function Index() {
   };
 
   useEffect(() => {
-    void pingHealth();
+    const stopStatus = startServerStatus();
     setIsLoggedIn(Boolean(getToken()));
     const offUnauth = onUnauthorized(() => setIsLoggedIn(false));
     const offWaking = onWakingChange(setWaking);
     return () => {
+      stopStatus();
       offUnauth();
       offWaking();
     };
@@ -73,7 +110,7 @@ function Index() {
     setIsLoggedIn(false);
   };
 
-  const wakingBanner = waking && (
+  const wakingBanner = waking && serverStatus !== "online" && (
     <div role="status" className="animate-mode-enter fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-mono text-[11px] text-muted-foreground shadow-sm">
       <LoaderCircle className="size-3.5 animate-spin text-warning" /> Waking up the server...
     </div>
@@ -152,8 +189,7 @@ function Index() {
             )}
 
             <footer className="flex items-center justify-between border-t border-border pt-5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              <span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-success" /> System ready</span>
-              <span>Local workspace</span>
+              <ServerStatusPill />
             </footer>
           </div>
         </main>
