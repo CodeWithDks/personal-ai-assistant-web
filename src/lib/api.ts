@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, CHAT_TIMEOUT_MS } from "./config";
 
 const TOKEN_KEY = "personal-ai-token";
 const TIMEOUT_MS = 60_000;
@@ -59,9 +59,12 @@ export function messageFor(status: number, path: string, detail: Detail): string
 }
 
 const NETWORK_MSG = "Couldn't reach the server. Please try again.";
+const TIMEOUT_MSG = "The assistant took too long, please try again.";
+/** Status used for client-side timeouts, so callers can tell them apart from network failures (status 0). */
+export const TIMEOUT_STATUS = -1;
 
 /* ---------- request ---------- */
-type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; multipart?: FormData; silent?: boolean; noTimeout?: boolean };
+type RequestOpts = { method?: string; json?: unknown; form?: Record<string, string>; multipart?: FormData; silent?: boolean; noTimeout?: boolean; timeoutMs?: number };
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -82,7 +85,8 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
 
   const controller = new AbortController();
-  const timeout = opts.noTimeout ? undefined : setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let timedOut = false;
+  const timeout = opts.noTimeout ? undefined : setTimeout(() => { timedOut = true; controller.abort(); }, opts.timeoutMs ?? TIMEOUT_MS);
   let slow = false;
   const slowTimer = opts.silent
     ? undefined
@@ -96,7 +100,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   try {
     res = await fetch(`${API_BASE_URL}${path}`, { method: opts.method ?? "GET", headers, body, signal: controller.signal });
   } catch {
-    throw new ApiError(NETWORK_MSG, 0);
+    throw new ApiError(timedOut ? TIMEOUT_MSG : NETWORK_MSG, timedOut ? TIMEOUT_STATUS : 0);
   } finally {
     clearTimeout(timeout);
     clearTimeout(slowTimer);
@@ -166,14 +170,14 @@ export const updateNote = (id: ApiNote["id"], body: NoteUpdate) => apiRequest<Ap
 export const deleteNote = (id: ApiNote["id"]) => apiRequest<void>(`/notes/${id}`, { method: "DELETE" });
 
 /* ---------- chat ---------- */
-/** Sends only the new message; the server keeps the conversation memory. No timeout: replies can take 30s+. */
+/** Sends only the new message; the server keeps the conversation memory. Replies can take 30s+, so chat gets the longer CHAT_TIMEOUT_MS instead of the default 60s. */
 export const sendChat = (message: string) =>
-  apiRequest<{ reply: string }>("/chat/", { method: "POST", json: { message }, noTimeout: true });
+  apiRequest<{ reply: string }>("/chat/", { method: "POST", json: { message }, timeoutMs: CHAT_TIMEOUT_MS });
 
 export type VoiceReply = { transcript: string; reply: string; audio_base64: string };
 /** Uploads one recorded clip as multipart field "audio". */
 export function sendVoice(file: Blob, filename: string) {
   const fd = new FormData();
   fd.append("audio", file, filename);
-  return apiRequest<VoiceReply>("/chat/voice", { method: "POST", multipart: fd, noTimeout: true });
+  return apiRequest<VoiceReply>("/chat/voice", { method: "POST", multipart: fd, timeoutMs: CHAT_TIMEOUT_MS });
 }
