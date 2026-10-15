@@ -6,11 +6,13 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChatSkeleton, ErrorNotice, useMockLoading } from "@/components/StatusBlocks";
-import { ApiError, sendChat, sendVoice } from "@/lib/api";
+import { ApiError, TIMEOUT_STATUS, sendChat, sendVoice } from "@/lib/api";
 import { NOTES_KEY } from "@/hooks/use-notes";
 import { TASKS_KEY } from "@/hooks/use-tasks";
 
-type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; voice?: boolean; audio?: string | undefined; error?: { message: string; offline: boolean } | undefined };
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string; time: string; voice?: boolean; audio?: string | undefined; error?: { message: string; detail?: string | undefined; offline: boolean } | undefined };
+
+const TIMEOUT_DETAIL = "It may have finished part of your request. Check your Tasks and Notes before retrying.";
 
 const MAX_LEN = 2000;
 const COUNTER_AT = 1800;
@@ -31,7 +33,7 @@ export function ChatScreen() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const runId = useRef(0);
-  const [voiceError, setVoiceError] = useState<{ message: string; offline: boolean } | null>(null);
+  const [voiceError, setVoiceError] = useState<{ message: string; detail?: string | undefined; offline: boolean } | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -99,10 +101,11 @@ export function ChatScreen() {
       refreshLists();
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
-      if (status >= 500) refreshLists();
+      if (status >= 500 || status === TIMEOUT_STATUS) refreshLists();
       if (run !== runId.current) return;
       const message = err instanceof Error ? err.message : "Request failed. Please try again.";
-      setMessages((m) => m.map((x) => (x.id === userId ? { ...x, error: { message, offline: status === 0 } } : x)));
+      const detail = status === TIMEOUT_STATUS ? TIMEOUT_DETAIL : undefined;
+      setMessages((m) => m.map((x) => (x.id === userId ? { ...x, error: { message, detail, offline: status === 0 } } : x)));
     } finally {
       if (run === runId.current) setThinking(false);
     }
@@ -125,9 +128,13 @@ export function ChatScreen() {
       if (audio) playAudio(assistantId, audio);
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
-      if (status >= 500) refreshLists();
+      if (status >= 500 || status === TIMEOUT_STATUS) refreshLists();
       if (run !== runId.current) return;
-      setVoiceError({ message: err instanceof Error ? err.message : "Request failed. Please try again.", offline: status === 0 });
+      setVoiceError({
+        message: err instanceof Error ? err.message : "Request failed. Please try again.",
+        detail: status === TIMEOUT_STATUS ? TIMEOUT_DETAIL : undefined,
+        offline: status === 0,
+      });
     } finally {
       if (run === runId.current) setThinking(false);
     }
@@ -263,7 +270,7 @@ export function ChatScreen() {
                   <p className="mt-1 px-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{m.role === "user" ? "You" : "Assistant"} · {m.time}</p>
                   {m.error && (
                     <div className="mt-2 text-left">
-                      <ErrorNotice variant={m.error.offline ? "offline" : "error"} title={m.error.message} onRetry={() => retry(m)} />
+                      <ErrorNotice variant={m.error.offline ? "offline" : "error"} title={m.error.message} body={m.error.detail} onRetry={() => retry(m)} />
                     </div>
                   )}
                 </div>
@@ -290,7 +297,7 @@ export function ChatScreen() {
       <form onSubmit={send} className="mx-auto mt-4 w-full max-w-3xl">
         {voiceError && (
           <div className="mb-3">
-            <ErrorNotice variant={voiceError.offline ? "offline" : "error"} title={voiceError.message} />
+            <ErrorNotice variant={voiceError.offline ? "offline" : "error"} title={voiceError.message} body={voiceError.detail} />
           </div>
         )}
         <div className={cn("rounded-lg border bg-card p-2 shadow-sm transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-ring/20", recording ? "border-destructive/60" : "border-border")}>
