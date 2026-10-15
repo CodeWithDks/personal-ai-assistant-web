@@ -1,4 +1,5 @@
 import { API_BASE_URL, CHAT_TIMEOUT_MS } from "./config";
+import { reportNetworkError, reportResponse } from "./serverStatus";
 
 const TOKEN_KEY = "personal-ai-token";
 const TIMEOUT_MS = 60_000;
@@ -100,6 +101,8 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   try {
     res = await fetch(`${API_BASE_URL}${path}`, { method: opts.method ?? "GET", headers, body, signal: controller.signal });
   } catch {
+    // Timeouts (e.g. a slow assistant) don't change server status; real network errors do.
+    if (!timedOut) reportNetworkError();
     throw new ApiError(timedOut ? TIMEOUT_MSG : NETWORK_MSG, timedOut ? TIMEOUT_STATUS : 0);
   } finally {
     clearTimeout(timeout);
@@ -109,6 +112,7 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
       emitSlow();
     }
   }
+  reportResponse(res.status);
 
   const data = await res.json().catch(() => undefined);
   if (!res.ok) {
