@@ -42,20 +42,28 @@ export function ChatScreen() {
   const discardRef = useRef(false);
 
   const stopAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    audioRef.current?.pause();
     setPlayingId(null);
+  };
+
+  // iOS Safari only starts audio inside a direct user tap: create and load()
+  // one shared element inside the mic tap handler, then reuse it for playback.
+  const unlockAudio = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      audioRef.current.load();
+    }
   };
 
   const playAudio = (id: string, src: string) => {
     stopAudio();
-    const audio = new Audio(src);
+    const audio = audioRef.current ?? new Audio();
     audioRef.current = audio;
-    audio.onended = () => { if (audioRef.current === audio) { audioRef.current = null; setPlayingId(null); } };
+    audio.src = src;
+    audio.load();
+    audio.onended = () => { if (audioRef.current === audio) setPlayingId(null); };
     setPlayingId(id);
-    audio.play().catch(() => { if (audioRef.current === audio) { audioRef.current = null; setPlayingId(null); } });
+    audio.play().catch(() => { if (audioRef.current === audio) setPlayingId(null); });
   };
 
   const togglePlay = (m: ChatMessage) => {
@@ -194,6 +202,7 @@ export function ChatScreen() {
 
   const toggleRecording = () => {
     if (thinking) return;
+    unlockAudio();
     const rec = recorderRef.current;
     if (rec && rec.state === "recording") rec.stop();
     else void startRecording();
